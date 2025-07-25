@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"byteman/pkg/world"
+	"fmt"
 	"log"
 
 	"github.com/nsf/termbox-go"
@@ -14,7 +15,7 @@ func NewRenderer() {
 	}
 }
 
-func Draw(player *world.Player, tiles [][]*world.Tile) {
+func Draw(player *world.Player, tiles [][]*world.Tile, score int) {
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 
 	// draw map
@@ -33,6 +34,12 @@ func Draw(player *world.Player, tiles [][]*world.Tile) {
 
 			termbox.SetCell(x, y, ch, fg, termbox.ColorBlack)
 		}
+	}
+
+	// Draw Score
+	scoreText := fmt.Sprintf("Score: %d", score)
+	for i, ch := range scoreText {
+		termbox.SetCell(i, len(tiles)+1, ch, termbox.ColorGreen, termbox.ColorBlack)
 	}
 
 	termbox.SetCell(int(player.Pos.X), int(player.Pos.Y), 'p', termbox.ColorYellow|termbox.AttrBold, termbox.ColorBlack)
