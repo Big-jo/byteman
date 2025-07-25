@@ -12,12 +12,13 @@ type GameState struct {
 	tiles     [][]*world.Tile
 	player    *world.Player
 	isRunning bool
+	score     int
 }
 
 func NewGame() GameState {
 	player := &world.Player{Pos: world.Vec2{X: 1, Y: 1}}
-	worldMap := world.Loadmap(128, 128)
-	gameState := GameState{tiles: worldMap, player: player, isRunning: true}
+	worldMap := world.Loadmap(24, 24)
+	gameState := GameState{tiles: worldMap, player: player, isRunning: true, score: 0}
 
 	return gameState
 }
@@ -28,7 +29,7 @@ func (gameState *GameState) Run() {
 	renderer.NewRenderer()
 	// defer renderer.Close()
 	for {
-		renderer.Draw(player, worldMap)
+		renderer.Draw(player, worldMap, gameState.score)
 		var dx, dy float64 = 0, 0
 
 		switch ev := termbox.PollEvent(); ev.Type {
@@ -62,6 +63,7 @@ func (gameState *GameState) Run() {
 			if worldMap[iy][ix].Type == world.Pellet {
 				worldMap[iy][ix].Type = world.Empty
 				worldMap[iy][ix].DisplayContent = ' '
+				gameState.score += 10
 			}
 		}
 	}
