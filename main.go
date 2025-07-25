@@ -1,8 +1,9 @@
 package main
 
 import (
-	// "fmt"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/nsf/termbox-go"
 )
@@ -16,71 +17,84 @@ const (
 	PowerUp
 )
 
-var gameMap = []string{
-	"####################",
-	"#........#.........#",
-	"#........#.........#",
-	"#........#.........#",
-	"#........###########",
-	"#..................#",
-	"####################",
-}
-
 type Vec2 struct {
 	x, y float64
 }
 
 type Tile struct {
-	Pos  Vec2
-	Type TileType
-}
-
-type Rect struct {
-	Pos Vec2
+	Pos            Vec2
+	Type           TileType
+	displayContent rune
 }
 
 type Player struct {
 	Pos Vec2
 }
 
-type GameState struct {
-	score int64
-}
-
 func isWall(x, y float64) bool {
 	ix := int(x)
 	iy := int(y)
 
-	if iy < 0 || iy >= len(tileMap) || ix < 0 || ix > len(tileMap[iy]) {
+	if iy < 0 || iy >= len(tileMap) || ix < 0 || ix >= len(tileMap[iy]) {
 		return true
 	}
 
 	return tileMap[iy][ix].Type == Wall
 }
 
-func loadMap(mapStrings []string) [][]Tile {
-	height := len(mapStrings)
-	width := len(mapStrings[0])
-	tiles := make([][]Tile, height)
+var (
+	DX = map[string]int{"N": 0, "S": 0, "W": -1, "E": 1}
+	DY = map[string]int{"N": -1, "S": 1, "W": 0, "E": 0}
+)
 
+func carvePath(x, y int, grid [][]Tile) {
+	directions := []string{"N", "S", "E", "W"}
+	rand.Shuffle(len(directions), func(i, j int) {
+		directions[i], directions[j] = directions[j], directions[i]
+	})
+
+	for _, dir := range directions {
+		nx, ny := x+DX[dir]*2, y+DY[dir]*2
+
+		if ny >= 0 && ny < len(grid) && nx >= 0 && nx < len(grid[ny]) && grid[ny][nx].Type == Wall {
+			grid[y+DY[dir]][x+DX[dir]].Type = Empty
+			grid[y+DY[dir]][x+DX[dir]].displayContent = ' '
+			grid[ny][nx].Type = Empty
+			grid[ny][nx].displayContent = ' '
+			carvePath(nx, ny, grid)
+		}
+	}
+}
+
+func loadMap(width int, height int) [][]Tile {
+	tiles := make([][]Tile, height)
 	for y := 0; y < height; y++ {
 		tiles[y] = make([]Tile, width)
-		for x, ch := range mapStrings[y] {
-			tileType := Empty
-
-			switch ch {
-			case '#':
-				tileType = Wall
-			case '.':
-				tileType = Pellet
-			}
-
+		for x := 0; x < width; x++ {
 			tiles[y][x] = Tile{
-				Pos:  Vec2{x: float64(x), y: float64(y)},
-				Type: tileType,
+				Pos:            Vec2{x: float64(x), y: float64(y)},
+				Type:           Wall,
+				displayContent: '#',
 			}
 		}
+	}
 
+	// Start carving from a random odd position
+	startX := rand.Intn(width/2)*2 + 1
+	startY := rand.Intn(height/2)*2 + 1
+	tiles[startY][startX].Type = Empty
+	tiles[startY][startX].displayContent = ' '
+
+	carvePath(startX, startY, tiles)
+
+	// Place pellets
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			if tiles[y][x].Type == Empty {
+				tiles[y][x].Type = Pellet
+				tiles[y][x].displayContent = '.'
+			}
+		}
 	}
 
 	return tiles
@@ -89,8 +103,7 @@ func loadMap(mapStrings []string) [][]Tile {
 var tileMap [][]Tile
 
 func main() {
-	gameState := GameState{score: 0}
-	tileMap = loadMap(gameMap)
+	rand.Seed(time.Now().UnixNano())
 
 	err := termbox.Init()
 	if err != nil {
@@ -98,15 +111,24 @@ func main() {
 	}
 	defer termbox.Close()
 
-	player := Player{Vec2{x: 1, y: 2}}
+	tileMap = loadMap(25, 25)
+
+	player := Player{Vec2{x: 1, y: 1}}
+	// Find a valid starting position for the player
+	for {
+		px := rand.Intn(len(tileMap[0]))
+		py := rand.Intn(len(tileMap))
+		if !isWall(float64(px), float64(py)) {
+			player.Pos.x = float64(px)
+			player.Pos.y = float64(py)
+			break
+		}
+	}
 
 	for {
 		draw(player)
-		// termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-		// termbox.SetCell(int(player.x), int(player.y), 'P', termbox.ColorYellow, termbox.ColorBlack)
-		// termbox.Flush()
 
-		var dy, dx float64 = 0, 0
+		var dx, dy float64 = 0, 0
 
 		switch ev := termbox.PollEvent(); ev.Type {
 		case termbox.EventKey:
@@ -122,6 +144,8 @@ func main() {
 			case termbox.KeyEsc:
 				return
 			}
+		case termbox.EventError:
+			log.Fatal(ev.Err)
 		}
 
 		newX := player.Pos.x + dx
@@ -130,6 +154,14 @@ func main() {
 		if !isWall(newX, newY) {
 			player.Pos.x = newX
 			player.Pos.y = newY
+
+			// Eat pellet
+			ix := int(newX)
+			iy := int(newY)
+			if tileMap[iy][ix].Type == Pellet {
+				tileMap[iy][ix].Type = Empty
+				tileMap[iy][ix].displayContent = ' '
+			}
 		}
 	}
 }
@@ -141,17 +173,13 @@ func draw(player Player) {
 	for y, row := range tileMap {
 		for x, cell := range row {
 			var fg termbox.Attribute
-			tile := cell
-
-			ch := ' '
+			ch := cell.displayContent
 			fg = termbox.ColorWhite
 
-			switch tile.Type {
+			switch cell.Type {
 			case Wall:
-				ch = '#'
 				fg = termbox.ColorRed
 			case Pellet:
-				ch = '.'
 				fg = termbox.ColorWhite
 			}
 
@@ -163,3 +191,4 @@ func draw(player Player) {
 
 	termbox.Flush()
 }
+
