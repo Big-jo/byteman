@@ -17,7 +17,7 @@ type GameState struct {
 
 func NewGame() GameState {
 	player := &world.Player{Pos: world.Vec2{X: 1, Y: 1}}
-	worldMap := world.Loadmap(24, 24)
+	worldMap := world.Loadmap(128, 128)
 	gameState := GameState{tiles: worldMap, player: player, isRunning: true, score: 0}
 
 	return gameState
